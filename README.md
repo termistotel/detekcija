@@ -1,0 +1,2 @@
+# detekcija
+detekcija trcanja
