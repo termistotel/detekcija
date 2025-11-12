@@ -34,7 +34,7 @@ AGGREGATE_N = 10
 TARGET_HZ = 5.0
 
 # Gdje spremati CSV (pri svakom pokretanju se nadodaje)
-OUTPUT_FILE = "dataset.csv"
+OUTPUT_FILE = "train_dataset.csv"
 
 # Koliko cesto ispisati stvarnu frekvenciju (u sekundama)
 PRINT_EVERY = 5.0

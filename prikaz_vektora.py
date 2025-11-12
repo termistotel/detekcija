@@ -1,114 +1,98 @@
-# Jednostavan realtime prikaz 3D vektora s BMI160 (lagano i kratko)
-# Pokretanje: python3 prikaz_vektora.py
+"""
+Najjednostavniji prikaz BMI160 podataka u Tkinteru (kratko i jasno)
+
+• Akcelerometar: tri projekcije vektora (Top XY, Front XZ, Side YZ)
+• Gyro: samo 3 trake (gx, gy, gz)
+
+Pokretanje: python3 prikaz_vektora.py
+"""
 
 import tkinter as tk
 from bmi160_senzor import citaj_podatke
 
-# Prosireni prozor
-W, H = 1024, 720        # velicina platna
-CX, CY = W // 3, H // 2  # centar za akcelerometar (lijeva 1/3)
-OX, OY = W - W // 3, H // 2  # "desni" centar za gyro (desna 1/3)
-
-# Skale (po potrebi prilagodite)
-S = 10    # skala za akcelerometar
-SG = 4    # skala za gyro vektor
-SGBAR = 1.5  # skala za gyro trake (bar graf)
-BAR_MAX = 160  # maksimalna duzina trake u pikselima (svaka strana)
-
-# Perspektiva: debljina linije vs Y dubina
-def debljina_iz_y(y):
-    return max(1, min(8, int(6 - 0.04 * y)))
+# Velicina prozora i skale (po potrebi prilagodite)
+W, H = 960, 600
+SA = 10.0   # skala za crte vektora akcelerometra
+SG = 2.0    # skala za gyro trake (barovi)
+BAR_MAX = 180  # max duljina trake u pikselima (svaka strana)
 
 root = tk.Tk()
-root.title("3D vektori — akcelerometar + gyro")
+root.title("BMI160 — Akcelerometar (3 projekcije) + Gyro trake")
 cv = tk.Canvas(root, width=W, height=H, bg="black", highlightthickness=0)
 cv.pack()
 
-# jednostavna projekcija 3D -> 2D (x, y, z) -> (u, v)
-# koristimo mali "pseudo-3D": u = x + 0.5*y, v = -z + 0.5*y
 
-def proj(origin_x, origin_y, x, y, z):
-    u = origin_x + (x + 0.5 * y)
-    v = origin_y - (z + 0.5 * y)
-    return u, v
-
-
-def crtaj_gyro_barove(x0, y0, w, h, gx, gy, gz):
-    """Vrlo lagan 3-osni bar-graf za gyro, s oznakama X/Y/Z.
-    x0, y0: gornji lijevi kut; w,h: dimenzije panela.
+# Pomoćne funkcije za crtanje
+def crtaj_kriz_i_vektor(x0, y0, w, h, a, b, boja, oznaka_a, oznaka_b):
+    """Panel s koordinatnim križem i vektorom iz sredine.
+    a ide po x (vodoravno), b ide po y (okomito, pozitivno prema gore).
     """
-    pad = 8
+    cx, cy = x0 + w // 2, y0 + h // 2
+    cv.create_rectangle(x0, y0, x0 + w, y0 + h, outline="#233")
+    cv.create_line(x0 + 8, cy, x0 + w - 8, cy, fill="#234")  # os x
+    cv.create_line(cx, y0 + 8, cx, y0 + h - 8, fill="#234")  # os y
+    # vektor: y ide gore pa minus
+    x_end = cx + int(a * SA)
+    y_end = cy - int(b * SA)
+    cv.create_line(cx, cy, x_end, y_end, fill=boja, width=3, capstyle=tk.ROUND)
+    cv.create_text(x0 + 10, y0 + 12, anchor="w", fill="#9cf", text=f"{oznaka_a}/{oznaka_b}")
+
+
+def crtaj_gyro_trake(x0, y0, w, h, gx, gy, gz):
+    """Tri jednostavne trake za gx, gy, gz (0 u sredini, +/- lijevo/desno)."""
+    pad = 10
     bw = w - 2 * pad
-    bh = (h - 4 * pad) // 3  # po red
+    bh = (h - 4 * pad) // 3
+    cv.create_rectangle(x0, y0, x0 + w, y0 + h, outline="#233")
 
-    # okvir panela
-    cv.create_rectangle(x0, y0, x0 + w, y0 + h, outline="#233", fill="", width=1)
-
-    def jedna_traka(row, val, boja, oznaka):
-        ty = y0 + pad + row * (bh + pad)
+    def traka(r, val, boja, tag):
+        ty = y0 + pad + r * (bh + pad)
         cx = x0 + pad + bw // 2
-        # os sredine
-        cv.create_line(cx, ty, cx, ty + bh, fill="#345", width=1)
-        # vrijednost
-        pix = int(max(-BAR_MAX, min(BAR_MAX, val * SGBAR)))
+        cv.create_line(cx, ty, cx, ty + bh, fill="#345")
+        pix = int(max(-BAR_MAX, min(BAR_MAX, val * SG)))
         if pix >= 0:
             cv.create_rectangle(cx, ty + 4, cx + pix, ty + bh - 4, fill=boja, outline="")
         else:
             cv.create_rectangle(cx + pix, ty + 4, cx, ty + bh - 4, fill=boja, outline="")
-        # oznaka
-        cv.create_text(x0 + 6, ty + bh // 2, anchor="w", fill="#9cf", text=oznaka)
+        cv.create_text(x0 + 8, ty + bh // 2, anchor="w", fill="#faa", text=tag)
 
-    jedna_traka(0, gx, "#f55", "gx")
-    jedna_traka(1, gy, "#f77", "gy")
-    jedna_traka(2, gz, "#faa", "gz")
+    traka(0, gx, "#f55", "gx")
+    traka(1, gy, "#f77", "gy")
+    traka(2, gz, "#faa", "gz")
 
 
 def crtaj():
+    # Ocitaj BMI160: akcelerometar (ax,ay,az) i gyro (gx,gy,gz)
     ax, ay, az, gx, gy, gz = citaj_podatke()
-
-    # Akcelerometar (zeleni vektor)
-    u_a, v_a = proj(CX, CY, ax * S, ay * S, az * S)
-    w_a = debljina_iz_y(ay * S)
-
-    # Gyro (crveni vektor)
-    u_g, v_g = proj(OX, OY, gx * SG, gy * SG, gz * SG)
-    w_g = debljina_iz_y(gy * SG)
 
     cv.delete("all")
 
-    # osi i pomocne crte
-    # srednja horizontalna
-    cv.create_line(10, CY, W - 10, CY, fill="#223", width=1)
-    # vertikalne kroz centre
-    cv.create_line(CX, 10, CX, H - 10, fill="#223", width=1)
-    cv.create_line(OX, 10, OX, H - 10, fill="#223", width=1)
-    # blaga Z dijagonala (oko lijevog centra)
-    cv.create_line(CX - 60, CY + 60, CX + 60, CY - 60, fill="#223", width=1)
-    # blaga Z dijagonala (oko desnog centra)
-    cv.create_line(OX - 60, OY + 60, OX + 60, OY - 60, fill="#223", width=1)
+    # Raspored: 2x2 panela
+    pw, ph = W // 2 - 20, H // 2 - 20
+    x1, y1 = 10, 10
+    x2, y2 = W // 2 + 10, 10
+    x3, y3 = 10, H // 2 + 10
+    x4, y4 = W // 2 + 10, H // 2 + 10
 
-    # vektori
-    cv.create_line(CX, CY, u_a, v_a, fill="lime", width=w_a, capstyle=tk.ROUND)
-    cv.create_oval(CX - 4, CY - 4, CX + 4, CY + 4, fill="white", outline="")
+    # Akcelerometar projekcije
+    # Top (XY): x vodoravno, y okomito
+    crtaj_kriz_i_vektor(x1, y1, pw, ph, ax, ay, "#6f6", "X", "Y")
+    # Front (XZ): x vodoravno, z okomito
+    crtaj_kriz_i_vektor(x2, y2, pw, ph, ax, az, "#6f6", "X", "Z")
+    # Side (YZ): y vodoravno, z okomito
+    crtaj_kriz_i_vektor(x3, y3, pw, ph, ay, az, "#6f6", "Y", "Z")
 
-    cv.create_line(OX, OY, u_g, v_g, fill="#f33", width=w_g, capstyle=tk.ROUND)
-    cv.create_oval(OX - 4, OY - 4, OX + 4, OY + 4, fill="white", outline="")
+    # Gyro trake (dolje desno)
+    crtaj_gyro_trake(x4, y4, pw, ph, gx, gy, gz)
 
-    # tekstualni info (gore lijevo/desno)
-    cv.create_text(8, 8, anchor="nw", fill="#9cf",
+    # Kratke brojke (gore lijevo i desno)
+    cv.create_text(12, H - ph - 8, anchor="sw", fill="#9cf",
                    text=f"ax:{ax:5.1f} ay:{ay:5.1f} az:{az:5.1f}")
-    cv.create_text(W - 8, 8, anchor="ne", fill="#f99",
+    cv.create_text(W - 12, H - ph - 8, anchor="se", fill="#f99",
                    text=f"gx:{gx:5.1f} gy:{gy:5.1f} gz:{gz:5.1f}")
 
-    # mali gyro bar-panel na krajnjoj desnoj strani
-    panel_w = 240
-    panel_h = 160
-    panel_x = W - panel_w - 10
-    panel_y = H - panel_h - 10
-    crtaj_gyro_barove(panel_x, panel_y, panel_w, panel_h, gx, gy, gz)
-
-    # ~60 FPS (16 ms)
-    root.after(16, crtaj)
+    # ~30-60 FPS (ovdje ~30ms)
+    root.after(30, crtaj)
 
 
 crtaj()
