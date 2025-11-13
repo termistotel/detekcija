@@ -1,1 +1,4 @@
 circuitpython-bmi160
+flask
+torch
+torchvision

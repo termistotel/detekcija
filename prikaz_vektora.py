@@ -1,14 +1,14 @@
 """
-Najjednostavniji prikaz BMI160 podataka u Tkinteru (kratko i jasno)
+Prikaz BMI160 podataka u Tkinteru
 
 • Akcelerometar: tri projekcije vektora (Top XY, Front XZ, Side YZ)
-• Gyro: samo 3 trake (gx, gy, gz)
+• Gyro: 3 trake (gx, gy, gz)
 
 Pokretanje: python3 prikaz_vektora.py
 """
 
 import tkinter as tk
-from bmi160_senzor import citaj_podatke
+from pomocni.bmi160_senzor import citaj_podatke
 
 # Velicina prozora i skale (po potrebi prilagodite)
 W, H = 960, 600
