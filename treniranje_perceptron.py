@@ -1,8 +1,7 @@
-# Minimalan primjer treniranja jednostavnog perceptrona u PyTorch-u
-# Bez nepotrebne apstrakcije: tri verzije modela i dvije funkcije gubitka.
+# Minimalan primjer treniranja jednostavne neuralne mreze u PyTorch-u
 #
-# Pretpostavka: postoje dvije CSV datoteke — jedna za trening, druga za validaciju.
-# Svaki red: label (0/1), zatim niz ulaza (npr. 6*N vrijednosti).
+# Pretpostavka: postoje dvije CSV datoteke - jedna za trening (train_dataset.csv)
+#                                          - druga za validaciju (val_dataset.csv)
 #
 # Pokretanje (primjer):
 #   python3 treniranje_perceptron.py
@@ -14,12 +13,11 @@ import os
 import time
 
 import torch
-import torch.nn as nn
 
 from pomocni.perceptron import PerceptronV3
 
 # =========================
-# PODESIVE VARIJABLE (na vrhu)
+# PODESIVE VARIJABLE
 # =========================
 
 # Putanje do CSV-a (train i val)
@@ -27,12 +25,12 @@ TRAIN_CSV = "train_dataset.csv"
 VAL_CSV = "val_dataset.csv"
 
 # Hiperparametri
-EPOCHS = 20000
-LR = 0.5
+EPOCHS = 20000  # Broj epoha ucenja
+LR = 0.5        # Brzina ucenja (Learning Rate
 
 
 # =========================
-# Ucitavanje podataka iz CSV-a (bez DataLoadera)
+# Ucitavanje podataka iz CSV-a
 # =========================
 
 def ucitaj_csv_putem_csv_modula(putanja):
@@ -45,25 +43,16 @@ def ucitaj_csv_putem_csv_modula(putanja):
             y.append([vals[0]])   # prvi stupac je label (0/1)
             X.append(vals[1:])  # Ostali stupci su mjerenja sa senzora
 
-    # Pretvori u tensor
+    # Pretvori u pytorch tensor
     X = torch.tensor(X, dtype=torch.float32)
     y = torch.tensor(y, dtype=torch.float32)
 
-    print(X.shape)
-
-    # Normaliziraj X po standardnoj devijaciji
-    # X = X / X.std(dim=1, keepdim=True)
     return X, y
 
 
-# =========================
-# Dvije funkcije gubitka
-# =========================
-
-def loss_mse(pred, target):
-    # Least squares: mean( (pred - target)^2 )
-    return ((pred - target) ** 2).mean()
-
+# =======================================
+# Funkcija gubitka - binary cross-entropy
+# =======================================
 
 def loss_bce(pred, target):
     # Binary cross-entropy: -mean( y*log(p) + (1-y)*log(1-p) )
@@ -72,18 +61,24 @@ def loss_bce(pred, target):
     return (-(target * torch.log(p) + (1 - target) * torch.log(1 - p))).mean()
 
 
+# =============================
+# Izracun tocnosti (Accuracy)
+# =============================
+
 def izracun_tocnosti(pred, target):
     # Prag 0.5 -> 0/1
     klas = (pred >= 0.5).float()
-    accuracy = (klas == target).float()
-    return torch.mean(accuracy).item()
+    tocnost = (klas == target).float()
+    srednja_tocnost = torch.mean(tocnost).item()
+    tocnost_postoci = srednja_tocnost * 100.0
+    return tocnost_postoci
 
 
-def main():
-    print("\n=== Minimalno treniranje perceptrona (PyTorch) ===")
+if __name__ == "__main__":
+    print("\n=== Treniranje neuronske mreze (PyTorch) ===")
     print(f"Train CSV: {TRAIN_CSV}")
     print(f"Val   CSV: {VAL_CSV}")
-    print(f"Epohe: {EPOCHS} | LR: {LR}")
+    print(f"Epohe: {EPOCHS} | Brzina ucenja: {LR}")
 
     Xtr, ytr = ucitaj_csv_putem_csv_modula(TRAIN_CSV)
     Xva, yva = ucitaj_csv_putem_csv_modula(VAL_CSV)
@@ -93,7 +88,6 @@ def main():
     print(f"Dimenzije: Train N={Ntr}, D={D} | Val N={Nva}")
 
     model = PerceptronV3(D)
-    criterion = loss_bce
 
     # Jednostavan trening petlja: rucno azuriranje parametara bez optimizera
     for epoch in range(1, EPOCHS + 1):
@@ -102,13 +96,13 @@ def main():
 
         # Forward prop
         pred = model(Xtr)
-        loss = criterion(pred, ytr)
+        loss = loss_bce(pred, ytr)
 
         # Back prop
         model.zero_grad()
         loss.backward()
 
-        # Rucni Gradient Descent
+        # Rucni gradijentni spust
         with torch.no_grad():
             for p in model.parameters():
                 p -= LR * p.grad
@@ -120,20 +114,16 @@ def main():
         model.eval()
         with torch.no_grad():
             pred_val = model(Xva)
-            val_loss = criterion(pred_val, yva).item()
+            val_loss = loss_bce(pred_val, yva).item()
             val_acc = izracun_tocnosti(pred_val.detach(), yva)
 
         dt = time.time() - t0
 
         if epoch % 100 == 0:
-            print(f"Epoch {epoch:3d} | train loss: {train_loss:.4f} acc: {train_acc:.3f} | val loss: {val_loss:.4f} acc: {val_acc:.3f} | {dt:.2f}s", end='\r')
+            print(f"Epoch {epoch:3d} | train loss: {train_loss:.4f} acc: {train_acc:.1f}% | val loss: {val_loss:.4f} acc: {val_acc:.1f}% | {dt:.2f}s", end='\r')
 
             # Spremi tezine (state_dict) nakon svake epohe
             path = os.path.join('modeli', f"perceptron.pth")
             torch.save(model.state_dict(), path)\
 
     print("Gotovo.")
-
-
-if __name__ == "__main__":
-    main()
